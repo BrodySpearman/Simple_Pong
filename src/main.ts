@@ -26,7 +26,7 @@ const app = new Application();
 
   // Red Pong Sprite //
   const  redPong: Sprite = Sprite.from(redPongTexture);
-  redPong.scale.set(0.15, 0.35);
+  redPong.scale.set(0.15, 0.3);
   redPong.anchor.set(0.5);
   redPong.position.set(10, app.screen.height / 2);
   app.stage.addChild(redPong);
@@ -87,58 +87,59 @@ const app = new Application();
     let pos = e.data.global;
     redPong.y = pos.y;
   };
-  
+
+  function checkRedPongBounds() {
+    if (redPong.y - redPong.height / 2 <= 0 || redPong.y + redPong.height / 2 >= app.screen.height) {
+      redPong.y = Math.max(redPong.height / 2, Math.min(redPong.y, app.screen.height - redPong.height / 2));
+    }
+  };
+
   function scoreIncrement() {
     score++;
     scoreboard.text = score.toString();
   };
 
-  // 
-
   // MOVEMENT / COLLISION LOGIC //
 
   // funtion to move the ball
-  function moveBall() {
+  function moveBall(delta: number) {
     // Initial movement animation listener
-    app.ticker.add((time) => {
-      const delta: number = time.deltaTime;
-      ball.x += velocity.x * delta;
-      ball.y += velocity.y * delta;
+    
+    ball.x += velocity.x * delta;
+    ball.y += velocity.y * delta;
 
-      // If ball collides with top window border reverse its velocity.y
-      if (ball.y - ball.height / 2 <= 0 || ball.y + ball.height / 2 >= app.screen.height) {
+    // If ball collides with top window border reverse its velocity.y
+    if (ball.y - ball.height / 2 <= 0 || ball.y + ball.height / 2 >= app.screen.height) {
+      velocity.y *= -1;
+    }
+    // If ball collides with right window border reverse its velocity.x
+    if(ball.x + ball.width / 2 >= app.screen.width) {
+      velocity.x *= -1;
+    }
+
+    // If ball collides with Paddle
+    if (AABBtest(redPong, ball)) {
+      // Reverse velocity.x
+      velocity.x *= -1;
+      scoreIncrement();
+
+      // 10% chance to ricochet, just to add some fun.
+      const ricochetChance = Math.floor(Math.random() * 10) + 1;
+      if (ricochetChance > 9) {
         velocity.y *= -1;
       }
-      // If ball collides with right window border reverse its velocity.x
-      if(ball.x + ball.width / 2 >= app.screen.width) {
-        velocity.x *= -1;
-      }
 
-      // If ball collides with Paddle
-      if (AABBtest(redPong, ball)) {
-        // Reverse velocity.x
-        velocity.x *= -1;
+      //  If ball hits the top or bottom third of the paddle have a 90% chance to ricochet.
+      // Haven't quite figured out how to implement the full pong logic into Pixi yet.
+      // Maybe using geometrical vectors to calculate the angle of the bounce, replacing sprites.
+      if (ball.y - ball.width / 2 < redPong.y + redPong.height / 4 ||
+          ball.y - ball.width / 2 > redPong.y + redPong.height * 3 / 4) {
 
-        // 10% chance to ricochet
-        const ricochetChance = Math.floor(Math.random() * 10) + 1;
-        if (ricochetChance > 9) {
+        if (ricochetChance > 1) {
           velocity.y *= -1;
         }
-        
-        scoreIncrement();
-
-        //  If ball hits the top or bottom third of the paddle have a 90% chance to ricochet.
-        // Haven't quite figured out how to implement the full pong logic into Pixi yet.
-        // Maybe using geometrical vectors to calculate the angle of the bounce, replacing sprites.
-        if (ball.y - ball.width / 2 < redPong.y + redPong.height / 4 ||
-            ball.y - ball.width / 2 > redPong.y + redPong.height * 3 / 4) {
-
-          if (ricochetChance > 1) {
-            velocity.y *= -1;
-          }
-        }
       }
-    });
+    }
   };
 
   // Run AABBtest function to check for collision between two sprites
@@ -155,14 +156,23 @@ const app = new Application();
   }
 
   // GAME LOOP //
+  // Click to start
+  app.stage.on("click", startGame);
+
   function startGame() {
     menuBg.visible = false;
     menuText.visible = false;
-    moveBall();
+    gameLoop();
+  }
+  
+  function gameLoop() {
+    app.ticker.add((time) => {
+
+      const delta: number = time.deltaTime;
+      checkRedPongBounds();
+      moveBall(delta);
+      
+    });
   }
 
-  function gameLoop() {
-    app.stage.on("click", startGame);
-  }
-  await gameLoop();
 })();
