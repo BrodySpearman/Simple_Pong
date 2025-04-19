@@ -1,4 +1,4 @@
-import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer } from "pixi.js";
+import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer, TextStyle } from "pixi.js";
 
 const app = new Application();
 (globalThis as any).__PIXI_APP__ = app;
@@ -92,7 +92,7 @@ const app = new Application();
   // Scoreboard Text //
   let scoreboardContainer: Container = new Container();
   scoreboardContainer.interactive = true;
-  scoreboardContainer.position.set(app.screen.width / 2, app.screen.height / 8);
+  scoreboardContainer.position.set(app.screen.width / 2, app.screen.height / 8 + 50);
   scoreboardContainer.width = app.screen.width / 4;
   scoreboardContainer.height = app.screen.height / 8;
 
@@ -100,11 +100,12 @@ const app = new Application();
     text: score.toString(),
     style: {
       fontFamily: "Square",
-      fontSize: 105,
-      fill: 0x8a8a8a,
+      fontSize: 184,
+      fill: 0x7a7a7a,
       align: "center",
     },
     anchor: { x: 0.5, y: 0.5 },
+    scale: { x: 1.5, y: 1.5 },
     position: { x: scoreboardContainer.width / 2, y: scoreboardContainer.height / 2 },
     interactive: true,
   });
@@ -165,6 +166,7 @@ const app = new Application();
     // If ball collides with Paddle
     if (AABBtest(redPong, ball)) {
       // Reverse velocity.x
+      scoreIncrement();
       velocity.x *= -1;
 
       // 10% chance to ricochet, just to add some fun.
@@ -173,15 +175,21 @@ const app = new Application();
         velocity.y *= -1;
       }
 
-      //  If ball hits the top or bottom third of the paddle have a 90% chance to ricochet.
+      //  If ball hits the top or bottom third of the paddle have a 30% chance to ricochet.
       // Haven't quite figured out how to implement the full pong logic into Pixi yet.
       // Maybe using geometrical vectors to calculate the angle of the bounce, replacing sprites.
-      if (ball.y < redPong.y - redPong.height / 4 ||
-          ball.y > redPong.y + redPong.height / 4 ) {
+      if (ball.y < redPong.y - redPong.height / 3 ||
+          ball.y > redPong.y + redPong.height / 3 ) {
 
-        if (ricochetChance > 1) {
-          velocity.y *= -1;
-        }
+            if(ricochetChance > 3) {
+              const angleChange: number = Math.floor(Math.random() * 10) - 5
+              velocity.y += angleChange;
+              velocity.x -= angleChange;
+            }
+
+            if (ricochetChance > 8) {
+              velocity.y *= -1;
+            }
       }
     }
   };
