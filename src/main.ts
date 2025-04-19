@@ -1,4 +1,4 @@
-import { Application, Assets, Sprite, Text, Texture } from "pixi.js";
+import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer } from "pixi.js";
 
 const app = new Application();
 (globalThis as any).__PIXI_APP__ = app;
@@ -9,7 +9,7 @@ const app = new Application();
 
   // important variables
   let speedMult: number = 1;
-  let velocity: { x: number; y: number } = { x: -12 * speedMult, y: (Math.floor(Math.random() * 10) - 5) * speedMult };
+  let velocity: { x: number; y: number } = { x: -12 * speedMult, y: (Math.floor(Math.random() * 10) - 5) };
   let score: number = 0;
 
   // Initialize new application
@@ -17,10 +17,34 @@ const app = new Application();
   await app.init({ background: "#0a0a0a", resizeTo: window, antialias: true });
   app.stage.interactive = true;
   document.getElementById("pixi-container")!.appendChild(app.canvas);
+  console.log("app initialized");
+
+  let appLayer = new RenderLayer();
+  let backgroundLayer = new RenderLayer();
+
+  console.log("layers initialized");
   
-  // Wait for the texture assets to load
+  // ASSET LOADING //
+
+  // Loading webfonts
+  Assets.addBundle("fonts", [
+    {
+      alias:"Square",
+      src: "assets/fonts/Square.ttf"
+    },
+    {
+      alias: "Creatodisplay Thin",
+      src: "assets/fonts/CreatoDisplay-Thin.otf"
+    },
+  ]);
+
+  await Assets.loadBundle("fonts");
+  console.log("webfonts loaded");
+
+  // Loading sprite textures
   const redPongTexture = await Assets.load("assets/sprites/redPong.png");
   const ballTexture = await Assets.load("assets/sprites/ball.png");
+  console.log("sprite textures loaded");
 
   // SPRITES //
 
@@ -29,8 +53,6 @@ const app = new Application();
   redPong.scale.set(0.15, 0.3);
   redPong.anchor.set(0.5);
   redPong.position.set(10, app.screen.height / 2);
-  app.stage.addChild(redPong);
-
   app.stage.on("globalpointermove", await moveRedPong);
 
   // Ball Sprite //
@@ -39,8 +61,7 @@ const app = new Application();
   ball.anchor.set(0.5);
   ball.position.set(app.screen.width / 2, app.screen.height / 2);
   ball.eventMode = "static";
-  
-  app.stage.addChild(ball);
+  ball.zIndex = 1;
   
   // Transparent Menu Background Sprite - for start menu events //
   const menuBg = new Sprite(Texture.EMPTY);
@@ -48,13 +69,17 @@ const app = new Application();
   menuBg.height = app.screen.height;
   menuBg.tint = 0x000000;
   menuBg.visible = true;
+
+  // Adding all sprites to the stage
+  app.stage.addChild(redPong);
+  app.stage.addChild(ball);
   app.stage.addChild(menuBg);
 
   // Menu Text //
   const menuText = new Text({
     text: "Click to start",
     style: {
-      fontFamily: "Arial",
+      fontFamily: "Creatodisplay Thin",
       fontSize: 42,
       fill: 0xffffff,
       align: "center",
@@ -63,31 +88,51 @@ const app = new Application();
     position: { x: app.screen.width / 2, y: app.screen.height - 150 }, 
     interactive: true,
   });
-  app.stage.addChild(menuText);
 
   // Scoreboard Text //
+  let scoreboardContainer: Container = new Container();
+  scoreboardContainer.interactive = true;
+  scoreboardContainer.position.set(app.screen.width / 2, app.screen.height / 8);
+  scoreboardContainer.width = app.screen.width / 4;
+  scoreboardContainer.height = app.screen.height / 8;
+
   const scoreboard = new Text({
     text: score.toString(),
     style: {
-      fontFamily: "Arial",
-      fontSize: 72,
+      fontFamily: "Square",
+      fontSize: 105,
       fill: 0x8a8a8a,
       align: "center",
     },
     anchor: { x: 0.5, y: 0.5 },
-    position: { x: app.screen.width / 2, y: app.screen.height / 8 },
+    position: { x: scoreboardContainer.width / 2, y: scoreboardContainer.height / 2 },
     interactive: true,
   });
-  app.stage.addChild(scoreboard);
+
+  app.stage.addChild(menuText);
+  app.stage.addChild(scoreboardContainer);
+  scoreboardContainer.addChild(scoreboard);
+
+  // LAYER CONFIGURATION //
+
+  appLayer.attach(redPong);
+  appLayer.attach(ball);
+  backgroundLayer.attach(menuBg);
+  backgroundLayer.attach(menuText);
+  backgroundLayer.attach(scoreboardContainer);
+
+  app.stage.addChildAt(appLayer, 1);
+  app.stage.addChildAt(backgroundLayer, 0);
 
   // GAME FUNCTIONS //
   
-  // Moves redPong to the mouse cursor Y level.
+  // Moves redPong to the mouse cursor Y level
   function moveRedPong(e: any) {
     let pos = e.data.global;
     redPong.y = pos.y;
   };
 
+  // Check if redPong is within the bounds of the window
   function checkRedPongBounds() {
     if (redPong.y - redPong.height / 2 <= 0 || redPong.y + redPong.height / 2 >= app.screen.height) {
       redPong.y = Math.max(redPong.height / 2, Math.min(redPong.y, app.screen.height - redPong.height / 2));
@@ -121,7 +166,6 @@ const app = new Application();
     if (AABBtest(redPong, ball)) {
       // Reverse velocity.x
       velocity.x *= -1;
-      scoreIncrement();
 
       // 10% chance to ricochet, just to add some fun.
       const ricochetChance = Math.floor(Math.random() * 10) + 1;
@@ -132,8 +176,8 @@ const app = new Application();
       //  If ball hits the top or bottom third of the paddle have a 90% chance to ricochet.
       // Haven't quite figured out how to implement the full pong logic into Pixi yet.
       // Maybe using geometrical vectors to calculate the angle of the bounce, replacing sprites.
-      if (ball.y - ball.width / 2 < redPong.y + redPong.height / 4 ||
-          ball.y - ball.width / 2 > redPong.y + redPong.height * 3 / 4) {
+      if (ball.y < redPong.y - redPong.height / 4 ||
+          ball.y > redPong.y + redPong.height / 4 ) {
 
         if (ricochetChance > 1) {
           velocity.y *= -1;
