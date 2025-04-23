@@ -1,4 +1,4 @@
-import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer, Optional } from "pixi.js";
+import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer } from "pixi.js";
 
 const app = new Application();
 (globalThis as any).__PIXI_APP__ = app;
