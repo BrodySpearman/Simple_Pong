@@ -1,4 +1,4 @@
-import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer, TextStyle } from "pixi.js";
+import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer, Optional } from "pixi.js";
 
 const app = new Application();
 (globalThis as any).__PIXI_APP__ = app;
@@ -9,8 +9,9 @@ const app = new Application();
 
   // important variables
   let speedMult: number = 1;
-  let velocity: { x: number; y: number } = { x: -12 * speedMult, y: (Math.floor(Math.random() * 10) - 5) };
+  const defaultVelocity: { x: number; y: number } = { x: -15 * speedMult, y: (Math.floor(Math.random() * 10) - 5) };
   let score: number = 0;
+  let gameStarted: boolean = false;
 
   // Initialize new application
   // npx vite
@@ -53,7 +54,7 @@ const app = new Application();
   redPong.scale.set(0.15, 0.3);
   redPong.anchor.set(0.5);
   redPong.position.set(10, app.screen.height / 2);
-  app.stage.on("globalpointermove", await moveRedPong);
+  
 
   // Ball Sprite //
   const ball: Sprite = Sprite.from(ballTexture);
@@ -75,7 +76,7 @@ const app = new Application();
   app.stage.addChild(ball);
   app.stage.addChild(menuBg);
 
-  // Menu Text //
+  // Intro Menu Text //
   const menuText = new Text({
     text: "Click to start",
     style: {
@@ -89,13 +90,29 @@ const app = new Application();
     interactive: true,
   });
 
-  // Scoreboard Text //
+  // Restart Menu Text //
+  const restartMenuText = new Text({
+    text: "hit R to restart",
+    style: {
+      fontFamily: "Creatodisplay Thin",
+      fontSize: 42,
+      fill: 0xffffff,
+      align: "center",
+    },
+    anchor: { x: 0.5, y: 0.5 },
+    position: { x: app.screen.width / 2, y: app.screen.height - 150 }, 
+    interactive: true,
+    visible: false
+  });
+
+  // Scoreboard Container //
   let scoreboardContainer: Container = new Container();
   scoreboardContainer.interactive = true;
   scoreboardContainer.position.set(app.screen.width / 2, app.screen.height / 8 + 50);
   scoreboardContainer.width = app.screen.width / 4;
   scoreboardContainer.height = app.screen.height / 8;
 
+  // Scoreboard Text //
   const scoreboard = new Text({
     text: score.toString(),
     style: {
@@ -110,7 +127,9 @@ const app = new Application();
     interactive: true,
   });
 
+  // Adding menus to the stage
   app.stage.addChild(menuText);
+  app.stage.addChild(restartMenuText);
   app.stage.addChild(scoreboardContainer);
   scoreboardContainer.addChild(scoreboard);
 
@@ -120,6 +139,7 @@ const app = new Application();
   appLayer.attach(ball);
   backgroundLayer.attach(menuBg);
   backgroundLayer.attach(menuText);
+  backgroundLayer.attach(restartMenuText);
   backgroundLayer.attach(scoreboardContainer);
 
   app.stage.addChildAt(appLayer, 1);
@@ -147,12 +167,25 @@ const app = new Application();
 
   // MOVEMENT / COLLISION LOGIC //
 
+  let initialVelocity: { x: number; y: number } = { x: 0, y: 0 };
+  let velocity = initialVelocity;
+  velocity.x = defaultVelocity.x;
+  velocity.y = defaultVelocity.y;
+
   // funtion to move the ball
   function moveBall(delta: number) {
+
     // Initial movement animation listener
-    
+
     ball.x += velocity.x * delta;
     ball.y += velocity.y * delta;
+    console.log(velocity);
+
+    if (ball.x + ball.width / 2 < 0) {
+      gameStarted = false;
+      restartPrompt();
+      return;
+    };
 
     // If ball collides with top window border reverse its velocity.y
     if (ball.y - ball.height / 2 <= 0 || ball.y + ball.height / 2 >= app.screen.height) {
@@ -165,26 +198,22 @@ const app = new Application();
 
     // If ball collides with Paddle
     if (AABBtest(redPong, ball)) {
+      
       // Reverse velocity.x
-      scoreIncrement();
       velocity.x *= -1;
-
-      // 10% chance to ricochet, just to add some fun.
-      const ricochetChance = Math.floor(Math.random() * 10) + 1;
-      if (ricochetChance > 9) {
-        velocity.y *= -1;
-      }
+      scoreIncrement();
 
       //  If ball hits the top or bottom third of the paddle have a 30% chance to ricochet.
       // Haven't quite figured out how to implement the full pong logic into Pixi yet.
       // Maybe using geometrical vectors to calculate the angle of the bounce, replacing sprites.
+      const ricochetChance = Math.floor(Math.random() * 10) + 1;
+
       if (ball.y < redPong.y - redPong.height / 3 ||
           ball.y > redPong.y + redPong.height / 3 ) {
 
             if(ricochetChance > 3) {
               const angleChange: number = Math.floor(Math.random() * 10) - 5
               velocity.y += angleChange;
-              velocity.x -= angleChange;
             }
 
             if (ricochetChance > 8) {
@@ -207,23 +236,68 @@ const app = new Application();
     );
   }
 
+  function resetGame() {
+    gameStarted = true;
+    menuBg.visible = false;
+    menuText.visible = false;
+
+    velocity.x = defaultVelocity.x;
+    velocity.y = defaultVelocity.y;
+    app.stage.off("click", resetGame);
+  }
+
   // GAME LOOP //
   // Click to start
   app.stage.on("click", startGame);
 
   function startGame() {
+    gameStarted = true;
     menuBg.visible = false;
     menuText.visible = false;
+    velocity.x = defaultVelocity.x;
+    velocity.y = defaultVelocity.y;
     gameLoop();
+    app.stage.off("click", startGame);
   }
+
+  // Restart Game
+  function restartGame() {
+    restartMenuText.visible = false;
+    ball.x = app.screen.width / 2;
+    ball.y = app.screen.height / 2;
+    menuBg.visible = true;
+    menuText.visible = true;
+    score = 0;
+    scoreboard.text = score.toString();
+    
+    app.stage.on("click", resetGame);
+  }
+  
+  function restartPrompt() {
+    restartMenuText.visible = true;
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "r") { 
+        restartGame();
+      }});
+  };
+
+
   
   function gameLoop() {
     app.ticker.add((time) => {
-
       const delta: number = time.deltaTime;
-      checkRedPongBounds();
-      moveBall(delta);
-      
+      console.log(gameStarted);
+      // This entire if/else structure might be entirely useless
+      // Will test in a future Branch
+      if (gameStarted) {
+        moveBall(delta);
+        app.stage.on("globalpointermove", moveRedPong);
+        checkRedPongBounds();
+      }
+      else {
+        velocity.x = 0;
+        velocity.y = 0;
+      }
     });
   }
 
