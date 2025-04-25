@@ -1,20 +1,26 @@
-import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer, Optional } from "pixi.js";
+import { Application, Assets, Container, Sprite, Text, Texture, RenderLayer } from "pixi.js";
 
 const app = new Application();
 (globalThis as any).__PIXI_APP__ = app;
 
 (async () => {
 
+  ////////////////////
   // INITIALIZATION //
+  ////////////////////
 
   // important variables
-  let speedMult: number = 1;
+  let speedMult: number = 1; // Not actually that important right now. Unused.
   const defaultVelocity: { x: number; y: number } = { x: -15 * speedMult, y: (Math.floor(Math.random() * 10) - 5) };
   let score: number = 0;
   let gameStarted: boolean = false;
 
+  const localStorage = window.localStorage;
+  const highScore: string = localStorage.getItem("highScore") || "0";
+
   // Initialize new application
   // npx vite
+  
   await app.init({ background: "#0a0a0a", resizeTo: window, antialias: true });
   app.stage.interactive = true;
   document.getElementById("pixi-container")!.appendChild(app.canvas);
@@ -25,7 +31,9 @@ const app = new Application();
 
   console.log("layers initialized");
   
+  ///////////////////
   // ASSET LOADING //
+  ///////////////////
 
   // Loading webfonts
   Assets.addBundle("fonts", [
@@ -47,7 +55,9 @@ const app = new Application();
   const ballTexture = await Assets.load("assets/sprites/ball.png");
   console.log("sprite textures loaded");
 
+  /////////////
   // SPRITES //
+  /////////////
 
   // Red Pong Sprite //
   const  redPong: Sprite = Sprite.from(redPongTexture);
@@ -75,6 +85,10 @@ const app = new Application();
   app.stage.addChild(redPong);
   app.stage.addChild(ball);
   app.stage.addChild(menuBg);
+
+  ///////////
+  // MENUS //
+  ///////////
 
   // Intro Menu Text //
   const menuText = new Text({
@@ -123,29 +137,50 @@ const app = new Application();
     },
     anchor: { x: 0.5, y: 0.5 },
     scale: { x: 1.5, y: 1.5 },
-    position: { x: scoreboardContainer.width / 2, y: scoreboardContainer.height / 2 },
+    position: { x: scoreboardContainer.width / 2, y: app.screen.height / 50 },
+    interactive: true,
+  });
+
+  // High Score Text //
+  const highScoreText = new Text({
+    text: "High Score: " + highScore.toString(),
+    style: {
+      fontFamily: "creatodisplay Thin",
+      fontSize: 26,
+      fill: 0xffffff,
+      align: "center",
+      fontWeight: "bolder",
+    },
+    anchor: { x: 0.5, y: 0.5 },
+    position: { x: app.screen.width / 2, y: app.screen.height - 50 },
     interactive: true,
   });
 
   // Adding menus to the stage
   app.stage.addChild(menuText);
   app.stage.addChild(restartMenuText);
+  app.stage.addChild(highScoreText);
   app.stage.addChild(scoreboardContainer);
   scoreboardContainer.addChild(scoreboard);
 
+  /////////////////////////
   // LAYER CONFIGURATION //
+  /////////////////////////
 
   appLayer.attach(redPong);
   appLayer.attach(ball);
   backgroundLayer.attach(menuBg);
   backgroundLayer.attach(menuText);
   backgroundLayer.attach(restartMenuText);
+  backgroundLayer.attach(highScoreText);
   backgroundLayer.attach(scoreboardContainer);
 
   app.stage.addChildAt(appLayer, 1);
   app.stage.addChildAt(backgroundLayer, 0);
 
+  ////////////////////
   // GAME FUNCTIONS //
+  ////////////////////
   
   // Moves redPong to the mouse cursor Y level
   function moveRedPong(e: any) {
@@ -157,15 +192,30 @@ const app = new Application();
   function checkRedPongBounds() {
     if (redPong.y - redPong.height / 2 <= 0 || redPong.y + redPong.height / 2 >= app.screen.height) {
       redPong.y = Math.max(redPong.height / 2, Math.min(redPong.y, app.screen.height - redPong.height / 2));
-    }
+    };
   };
 
+  // Increments score and updates scoreboard text
   function scoreIncrement() {
     score++;
     scoreboard.text = score.toString();
   };
 
+  // Checks for high score and updates scoreboard
+  function highScoreCheck(score: number) {
+    if (score > Number(highScore)) {
+      localStorage.setItem("highScore", score.toString());
+      highScoreText.text = "High Score: " + score.toString();
+    }
+  }
+
+  function fadeText(text: Text) {
+    while (text.alpha > 0) {};
+  }
+
+  ////////////////////////////////
   // MOVEMENT / COLLISION LOGIC //
+  ////////////////////////////////
 
   let initialVelocity: { x: number; y: number } = { x: 0, y: 0 };
   let velocity = initialVelocity;
@@ -179,22 +229,22 @@ const app = new Application();
 
     ball.x += velocity.x * delta;
     ball.y += velocity.y * delta;
-    console.log(velocity);
 
     if (ball.x + ball.width / 2 < 0) {
       gameStarted = false;
       restartPrompt();
+      highScoreCheck(score);
       return;
     };
 
     // If ball collides with top window border reverse its velocity.y
     if (ball.y - ball.height / 2 <= 0 || ball.y + ball.height / 2 >= app.screen.height) {
       velocity.y *= -1;
-    }
+    };
     // If ball collides with right window border reverse its velocity.x
     if(ball.x + ball.width / 2 >= app.screen.width) {
       velocity.x *= -1;
-    }
+    };
 
     // If ball collides with Paddle
     if (AABBtest(redPong, ball)) {
@@ -212,11 +262,11 @@ const app = new Application();
           ball.y > redPong.y + redPong.height / 3 ) {
 
             if(ricochetChance > 3) {
-              const angleChange: number = Math.floor(Math.random() * 10) - 5
+              const angleChange: number = Math.floor(Math.random() * 10) 
               velocity.y += angleChange;
             }
 
-            if (ricochetChance > 8) {
+            if (ricochetChance <= 3) {
               velocity.y *= -1;
             }
       }
@@ -234,22 +284,9 @@ const app = new Application();
       object1Bounds.y < object2Bounds.y + object2Bounds.height &&
       object1Bounds.y + object1Bounds.height > object2Bounds.y
     );
-  }
+  };
 
-  function resetGame() {
-    gameStarted = true;
-    menuBg.visible = false;
-    menuText.visible = false;
-
-    velocity.x = defaultVelocity.x;
-    velocity.y = defaultVelocity.y;
-    app.stage.off("click", resetGame);
-  }
-
-  // GAME LOOP //
-  // Click to start
-  app.stage.on("click", startGame);
-
+  // removes menus and click event listeners, also sets default ball speed
   function startGame() {
     gameStarted = true;
     menuBg.visible = false;
@@ -258,7 +295,7 @@ const app = new Application();
     velocity.y = defaultVelocity.y;
     gameLoop();
     app.stage.off("click", startGame);
-  }
+  };
 
   // Restart Game
   function restartGame() {
@@ -271,33 +308,60 @@ const app = new Application();
     scoreboard.text = score.toString();
     
     app.stage.on("click", resetGame);
-  }
-  
-  function restartPrompt() {
-    restartMenuText.visible = true;
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "r") { 
-        restartGame();
-      }});
   };
 
+  // Listens for a keypress to restart the game, removes event listener
+  function restartHandler(e: any) {
+    if (e.key === "r") {
+      restartGame();
+      document.removeEventListener("keydown", restartHandler);
+    };
+  };
+  
+  // Restart text and event listener
+  function restartPrompt() {
+    restartMenuText.visible = true;
+    document.addEventListener("keydown", restartHandler);
+  };
 
+  // Resets game state after restart
+  // Resets ball position and velocity
+  function resetGame() {
+    gameStarted = true;
+    menuBg.visible = false;
+    menuText.visible = false;
+
+    velocity.x = defaultVelocity.x;
+    velocity.y = defaultVelocity.y;
+    app.stage.off("click", resetGame);
+  };
+
+  ///////////////
+  // GAME LOOP //
+  ///////////////
+
+  // Click to start
+
+  app.stage.on("click", startGame);
   
   function gameLoop() {
     app.ticker.add((time) => {
       const delta: number = time.deltaTime;
-      console.log(gameStarted);
+
       // This entire if/else structure might be entirely useless
       // Will test in a future Branch
+
       if (gameStarted) {
         moveBall(delta);
         app.stage.on("globalpointermove", moveRedPong);
         checkRedPongBounds();
       }
+
       else {
         velocity.x = 0;
         velocity.y = 0;
       }
+
     });
   }
 
